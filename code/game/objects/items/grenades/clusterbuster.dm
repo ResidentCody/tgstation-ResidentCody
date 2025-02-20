@@ -2,21 +2,28 @@
 //Clusterbang
 ////////////////////
 
-#define RANDOM_DETONATE_MIN_TIME 1.5 SECONDS
-#define RANDOM_DETONATE_MAX_TIME 6 SECONDS
+#define RANDOM_DETONATE_MIN_TIME (1.5 SECONDS)
+#define RANDOM_DETONATE_MAX_TIME (6 SECONDS)
 
 /obj/item/grenade/clusterbuster
 	desc = "Use of this weapon may constitute a war crime in your area, consult your local captain."
 	name = "clusterbang"
-	icon = 'icons/obj/grenade.dmi'
+	icon = 'icons/obj/weapons/grenade.dmi'
 	icon_state = "clusterbang"
 	var/base_state = "clusterbang"
 	var/payload = /obj/item/grenade/flashbang/cluster
 	var/payload_spawner = /obj/effect/payload_spawner
-	var/prime_sound = 'sound/weapons/armbomb.ogg'
 	var/min_spawned = 4
 	var/max_spawned = 8
 	var/segment_chance = 35
+
+/obj/item/grenade/clusterbuster/apply_grenade_fantasy_bonuses(quality)
+	min_spawned = modify_fantasy_variable("min_spawned", min_spawned, round(quality/2))
+	max_spawned = modify_fantasy_variable("max_spawned", max_spawned, round(quality/2))
+
+/obj/item/grenade/clusterbuster/remove_grenade_fantasy_bonuses(quality)
+	min_spawned = reset_fantasy_variable("min_spawned", min_spawned)
+	max_spawned = reset_fantasy_variable("max_spawned", max_spawned)
 
 /obj/item/grenade/clusterbuster/detonate(mob/living/lanced_by)
 	. = ..()
@@ -36,7 +43,7 @@
 		new /obj/item/grenade/clusterbuster/segment(drop_location(), src)//Creates 'segments' that launches a few more payloads
 
 	new payload_spawner(drop_location(), payload, numspawned)//Launches payload
-	playsound(src, prime_sound, 75, TRUE, -3)
+	playsound(src, grenade_arm_sound, 75, TRUE, -3)
 	qdel(src)
 
 //////////////////////
@@ -45,7 +52,7 @@
 /obj/item/grenade/clusterbuster/segment
 	desc = "A smaller segment of a clusterbang. Better run!"
 	name = "clusterbang segment"
-	icon = 'icons/obj/grenade.dmi'
+	icon = 'icons/obj/weapons/grenade.dmi'
 	icon_state = "clusterbang_segment"
 	base_state = "clusterbang_segment"
 
@@ -58,7 +65,7 @@
 		icon_state = base_state
 		payload_spawner = base.payload_spawner
 		payload = base.payload
-		prime_sound = base.prime_sound
+		grenade_arm_sound = base.grenade_arm_sound
 		min_spawned = base.min_spawned
 		max_spawned = base.max_spawned
 	icon_state = "[base_state]_active"
@@ -66,11 +73,11 @@
 	var/steps = rand(1, 4)
 	for(var/step in 1 to steps)
 		step_away(src, loc)
-	addtimer(CALLBACK(src, .proc/detonate), rand(RANDOM_DETONATE_MIN_TIME, RANDOM_DETONATE_MAX_TIME))
+	addtimer(CALLBACK(src, PROC_REF(detonate)), rand(RANDOM_DETONATE_MIN_TIME, RANDOM_DETONATE_MAX_TIME))
 
 /obj/item/grenade/clusterbuster/segment/detonate(mob/living/lanced_by)
 	new payload_spawner(drop_location(), payload, rand(min_spawned, max_spawned))
-	playsound(src, prime_sound, 75, TRUE, -3)
+	playsound(src, grenade_arm_sound, 75, TRUE, -3)
 	qdel(src)
 
 //////////////////////////////////
@@ -87,7 +94,8 @@
 		var/obj/item/grenade/grenade = new type(loc)
 		if(istype(grenade))
 			grenade.active = TRUE
-			addtimer(CALLBACK(grenade, /obj/item/grenade/proc/detonate), rand(RANDOM_DETONATE_MIN_TIME, RANDOM_DETONATE_MAX_TIME))
+			grenade.type_cluster = TRUE
+			addtimer(CALLBACK(grenade, TYPE_PROC_REF(/obj/item/grenade, detonate)), rand(RANDOM_DETONATE_MIN_TIME, RANDOM_DETONATE_MAX_TIME))
 		var/steps = rand(1, 4)
 		for(var/step in 1 to steps)
 			step_away(src, loc)
@@ -116,7 +124,7 @@
 		var/chosen = pick(subtypesof(/obj/item/slime_extract))
 		var/obj/item/slime_extract/slime_extract = new chosen(loc)
 		if(volatile)
-			addtimer(CALLBACK(slime_extract, /obj/item/slime_extract/proc/activate_slime), rand(RANDOM_DETONATE_MIN_TIME, RANDOM_DETONATE_MAX_TIME))
+			addtimer(CALLBACK(slime_extract, TYPE_PROC_REF(/obj/item/slime_extract, activate_slime)), rand(RANDOM_DETONATE_MIN_TIME, RANDOM_DETONATE_MAX_TIME))
 		var/steps = rand(1, 4)
 		for(var/step in 1 to steps)
 			step_away(src, loc)
@@ -198,7 +206,7 @@
 	icon_state = "slimebang"
 	base_state = "slimebang"
 	payload_spawner = /obj/effect/payload_spawner/random_slime
-	prime_sound = 'sound/effects/bubbles.ogg'
+	grenade_arm_sound = 'sound/effects/bubbles/bubbles.ogg'
 
 /obj/item/grenade/clusterbuster/slime/volatile
 	payload_spawner = /obj/effect/payload_spawner/random_slime/volatile

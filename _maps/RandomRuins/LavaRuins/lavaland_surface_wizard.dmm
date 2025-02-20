@@ -135,7 +135,7 @@
 	dir = 4
 	},
 /obj/structure/table/bronze,
-/obj/item/disk/design_disk/adv/knight_gear,
+/obj/item/disk/design_disk/knight_gear,
 /turf/open/indestructible/necropolis,
 /area/lavaland/surface/outdoors)
 "q" = (
@@ -309,7 +309,7 @@
 /turf/open/misc/asteroid/basalt/lava_land_surface,
 /area/lavaland/surface/outdoors)
 "K" = (
-/mob/living/simple_animal/hostile/dark_wizard,
+/mob/living/basic/dark_wizard,
 /turf/open/misc/asteroid/basalt/lava_land_surface,
 /area/lavaland/surface/outdoors)
 

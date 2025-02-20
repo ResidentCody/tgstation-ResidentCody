@@ -6,16 +6,19 @@
 	initial_gas_mix = AIRLESS_ATMOS
 	temperature = TCMB
 
-/turf/open/floor/engine/hull/rcd_act(mob/user, obj/item/construction/rcd/the_rcd, passed_mode) //no rcd destroying this flooring
-	if(passed_mode == RCD_DECONSTRUCT)
-		to_chat(user, span_warning("The flooring is too thick to be regularly deconstructed!"))
-		return FALSE
-	return ..()
-
-/// RCD-immune plating generated only by shuttle code for shuttle ceilings on multi-z maps, should not be mapped in or creatable in any other way
 /turf/open/floor/engine/hull/ceiling
 	name = "shuttle ceiling plating"
 	var/old_turf_type
+
+/turf/open/floor/engine/hull/ceiling/Initialize(mapload)
+	. = ..()
+	if(!istype(loc, /area/space))
+		return
+	if(istype(loc, /area/space/nearstation))
+		return
+	new /obj/effect/mapping_error (src) //We're in a normal space tile, meaning we aren't lit correct.
+										///datum/unit_test/mapping_nearstation_test.dm SHOULD fail this case automatically
+										//this is just here so the mapper responsible can easily see where the issues are directly on the map.
 
 /turf/open/floor/engine/hull/ceiling/AfterChange(flags, oldType)
 	. = ..()
