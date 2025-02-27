@@ -10,7 +10,7 @@
 
 /obj/item/circuit_component/object_overlay/bar
 	display_name = "Bar Overlay"
-	desc = "Requires a BCI shell. A component that shows a bar overlay ontop of an object from a range of 0 to 100."
+	desc = "Requires a BCI shell. A component that shows a bar overlay atop an object, ranging from 0 to 100."
 	category = "BCI"
 
 	var/datum/port/input/option/bar_overlay_options
@@ -44,8 +44,9 @@
 		number_clear = round(number_clear / 6.25) * 6.25
 	else if(current_option == COMP_BAR_OVERLAY_VERTICAL)
 		number_clear = round(number_clear / 10) * 10
+
 	var/image/cool_overlay = image(icon = 'icons/hud/screen_bci.dmi', loc = target_atom, icon_state = "[options_map[current_option]][number_clear]", layer = RIPPLE_LAYER)
-	cool_overlay.plane = ABOVE_LIGHTING_PLANE
+	SET_PLANE_EXPLICIT(cool_overlay, ABOVE_LIGHTING_PLANE, target_atom)
 
 	if(image_pixel_x.value != null)
 		cool_overlay.pixel_x = image_pixel_x.value
@@ -57,9 +58,10 @@
 		/datum/atom_hud/alternate_appearance/basic/one_person,
 		"bar_overlay_[REF(src)]",
 		cool_overlay,
+		null,
 		owner,
 	)
-	alt_appearance.add_hud_to(owner)
+	alt_appearance.show_to(owner)
 
 	active_overlays[target_atom] = WEAKREF(alt_appearance)
 

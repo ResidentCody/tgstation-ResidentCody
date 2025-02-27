@@ -1,13 +1,15 @@
-import { useBackend, useLocalState } from '../backend';
+import { useState } from 'react';
 import {
   Box,
   Button,
+  Dropdown,
   LabeledList,
   NumberInput,
-  Dropdown,
   Section,
   Stack,
-} from '../components';
+} from 'tgui-core/components';
+
+import { useBackend } from '../backend';
 import { Window } from '../layouts';
 import {
   AtmosHandbookContent,
@@ -23,25 +25,21 @@ type Chamber = {
   output_info?: { active: boolean; amount: number };
 };
 
-export const AtmosControlConsole = (props, context) => {
+export const AtmosControlConsole = (props) => {
   const { act, data } = useBackend<{
     chambers: Chamber[];
     maxInput: number;
     maxOutput: number;
     reconnecting: boolean;
     control: boolean;
-  }>(context);
+  }>();
   const chambers = data.chambers || [];
-  const [chamberId, setChamberId] = useLocalState(
-    context,
-    'chamberId',
-    chambers[0]?.id
-  );
-  const selectedChamber
-    = chambers.length === 1
+  const [chamberId, setChamberId] = useState(chambers[0]?.id);
+  const selectedChamber =
+    chambers.length === 1
       ? chambers[0]
       : chambers.find((chamber) => chamber.id === chamberId);
-  const [setActiveGasId, setActiveReactionId] = atmosHandbookHooks(context);
+  const [setActiveGasId, setActiveReactionId] = atmosHandbookHooks();
   return (
     <Window width={550} height={350}>
       <Window.Content scrollable>
@@ -53,8 +51,10 @@ export const AtmosControlConsole = (props, context) => {
               selected={selectedChamber?.name}
               onSelected={(value) =>
                 setChamberId(
-                  chambers.find((chamber) => chamber.name === value)?.id
-                    || chambers[0].id)}
+                  chambers.find((chamber) => chamber.name === value)?.id ||
+                    chambers[0].id,
+                )
+              }
             />
           </Section>
         )}
@@ -66,8 +66,10 @@ export const AtmosControlConsole = (props, context) => {
                 icon="undo"
                 content="Reconnect"
                 onClick={() => act('reconnect')}
-              />)
-          }>
+              />
+            )
+          }
+        >
           {!!selectedChamber && !!selectedChamber.gasmix ? (
             <GasmixParser
               gasmix={selectedChamber.gasmix}
@@ -100,24 +102,24 @@ export const AtmosControlConsole = (props, context) => {
                         onClick={() =>
                           act('toggle_input', {
                             chamber: selectedChamber.id,
-                          })}
+                          })
+                        }
                       />
                     </LabeledList.Item>
                     <LabeledList.Item label="Input Rate">
                       <NumberInput
+                        step={1}
                         value={Number(selectedChamber.input_info.amount)}
                         unit="L/s"
                         width="63px"
                         minValue={0}
                         maxValue={data.maxInput}
-                        // This takes an exceptionally long time to update
-                        // due to being an async signal
-                        suppressFlicker={2000}
-                        onChange={(e, value) =>
+                        onChange={(value) =>
                           act('adjust_input', {
                             chamber: selectedChamber.id,
                             rate: value,
-                          })}
+                          })
+                        }
                       />
                     </LabeledList.Item>
                   </LabeledList>
@@ -142,7 +144,8 @@ export const AtmosControlConsole = (props, context) => {
                         onClick={() =>
                           act('toggle_output', {
                             chamber: selectedChamber.id,
-                          })}
+                          })
+                        }
                       />
                     </LabeledList.Item>
                     <LabeledList.Item label="Output Pressure">
@@ -153,14 +156,12 @@ export const AtmosControlConsole = (props, context) => {
                         minValue={0}
                         maxValue={data.maxOutput}
                         step={10}
-                        // This takes an exceptionally long time to update
-                        // due to being an async signal
-                        suppressFlicker={2000}
-                        onChange={(e, value) =>
+                        onChange={(value) =>
                           act('adjust_output', {
                             chamber: selectedChamber.id,
                             rate: value,
-                          })}
+                          })
+                        }
                       />
                     </LabeledList.Item>
                   </LabeledList>

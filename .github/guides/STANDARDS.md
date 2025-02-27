@@ -23,11 +23,18 @@ You can avoid hacky code by using object-oriented methodologies, such as overrid
 
 ### Develop Secure Code
 
-* Player input must always be escaped safely, we recommend you use stripped_input in all cases where you would use input. Essentially, just always treat input from players as inherently malicious and design with that use case in mind
+* Player input must always be escaped safely, we recommend you use stripped_input in all cases where you would use input. Essentially, just always treat input from players as inherently malicious and design with that use case in mind.
+	* This extends to much further than just numbers or strings. You should always sanity check that an input is valid, especially when it comes to datums or references!
+	* Input stalling is a very common exploit / bug that involves opening an input window when in a valid state, and triggering the input after exiting the valid state. These can be very serious, and allow players to teleport across the map or remove someone's brain at any given moment. If you check the player must be in a specific context before an input, you should generally check that they are still in the context AFTER the input resolves.
+		* For example, if you have an item which can be used (in hand) by a player to make it explode, but you want them to confirm (via prompt) that they want it to explode, you should check that the item is still in the player's hands after confirming. Otherwise, they could drop it and explode it at any moment they want.
+	* Another less common exploit involves allowing a player to open multiple of an input at once. This may allow the player to stack effects, such as triggering 10 explosions when only 1 should be allowed. While a lot of code is generally built in a way making this infeasible (usually due to runtime errors), it is noteworthy regardless.
+		* You should also consider if it would make sense to apply a timeout to your input, to prevent players from opening it and keeping it on their screen until convenient.
 
 * Calls to the database must be escaped properly - use sanitizeSQL to escape text based database entries from players or admins, and isnum() for number based database entries from players or admins.
 
 * All calls to topics must be checked for correctness. Topic href calls can be easily faked by clients, so you should ensure that the call is valid for the state the item is in. Do not rely on the UI code to provide only valid topic calls, because it won't.
+	* Don't expose a topic call to more than what you need it to. If you are only looking for an item inside an atom, don't look for every item in the world - just look in the atom's contents.
+		* You rarely should call `locate(ref)` without specifying a list! This is a serious exploit vector which can be used to spawn Nar'sie or delete players across the map. Try narrowing it down via a list - such as `locate(ref) in contents`, to find an item in an atom's contents.
 
 * Information that players could use to metagame (that is, to identify round information and/or antagonist type via information that would not be available to them in character) should be kept as administrator only.
 
@@ -68,15 +75,11 @@ var/path_type = "/obj/item/baseball_bat"
 
 * You are expected to help maintain the code that you add, meaning that if there is a problem then you are likely to be approached in order to fix any issues, runtimes, or bugs.
 
-* Do not divide when you can easily convert it to multiplication. (ie `4/2` should be done as `4*0.5`)
-
 * Separating single lines into more readable blocks is not banned, however you should use it only where it makes new information more accessible, or aids maintainability. We do not have a column limit, and mass conversions will not be received well.
 
 * If you used regex to replace code during development of your code, post the regex in your PR for the benefit of future developers and downstream users.
 
 * Changes to the `/config` tree must be made in a way that allows for updating server deployments while preserving previous behaviour. This is due to the fact that the config tree is to be considered owned by the user and not necessarily updated alongside the remainder of the code. The code to preserve previous behaviour may be removed at some point in the future given the OK by maintainers.
-
-* The dlls section of tgs3.json is not designed for dlls that are purely `call()()`ed since those handles are closed between world reboots. Only put in dlls that may have to exist between world reboots.
 
 ## Structural
 ### No duplicated code (Don't repeat yourself)
@@ -97,7 +100,54 @@ While we normally encourage (and in some cases, even require) bringing out of da
 
 * Files and path accessed and referenced by code above simply being #included should be strictly lowercase to avoid issues on filesystems where case matters.
 
-### Signal Handlers
+### RegisterSignal()
+
+#### PROC_REF Macros
+When referencing procs in RegisterSignal, Callback and other procs you should use PROC_REF, TYPE_PROC_REF and GLOBAL_PROC_REF macros.
+They ensure compilation fails if the reffered to procs change names or get removed.
+The macro to be used depends on how the proc you're in relates to the proc you want to use:
+
+PROC_REF if the proc you want to use is defined on the current proc type or any of its ancestor types.
+Example:
+```
+/mob/proc/funny()
+	to_chat(world,"knock knock")
+
+/mob/subtype/proc/very_funny()
+	to_chat(world,"who's there?")
+
+/mob/subtype/proc/do_something()
+	// Proc on our own type
+	RegisterSignal(x, COMSIG_OTHER_FAKE, PROC_REF(very_funny))
+	// Proc on ancestor type, /mob is parent type of /mob/subtype
+	RegisterSignal(x, COMSIG_FAKE, PROC_REF(funny))
+```
+
+TYPE_PROC_REF if the proc you want to use is defined on a different unrelated type
+Example:
+```
+/obj/thing/proc/funny()
+	to_chat(world,"knock knock")
+
+/mob/subtype/proc/do_something()
+	var/obj/thing/x = new()
+	// we're referring to /obj/thing proc inside /mob/subtype proc
+	RegisterSignal(x, COMSIG_FAKE, TYPE_PROC_REF(/obj/thing, funny))
+```
+
+GLOBAL_PROC_REF if the proc you want to use is a global proc.
+Example:
+```
+/proc/funny()
+	to_chat(world,"knock knock")
+
+/mob/subtype/proc/do_something()
+	addtimer(CALLBACK(GLOBAL_PROC, GLOBAL_PROC_REF(funny)), 100))
+```
+
+Note that the same rules go for verbs too! We have VERB_REF() and TYPE_VERB_REF() as you need it in these same cases. GLOBAL_VERB_REF() isn't a thing however, as verbs are not global.
+
+#### Signal Handlers
 
 All procs that are registered to listen for signals using `RegisterSignal()` must contain at the start of the proc `SIGNAL_HANDLER` eg;
 ```
@@ -107,7 +157,17 @@ All procs that are registered to listen for signals using `RegisterSignal()` mus
 ```
 This is to ensure that it is clear the proc handles signals and turns on a lint to ensure it does not sleep.
 
-Any sleeping behaviour that you need to perform inside a `SIGNAL_HANDLER` proc must be called asynchronously (e.g. with `INVOKE_ASYNC()`) or be redone to work asynchronously. 
+Any sleeping behaviour that you need to perform inside a `SIGNAL_HANDLER` proc must be called asynchronously (e.g. with `INVOKE_ASYNC()`) or be redone to work asynchronously.
+
+#### `override`
+
+Each atom can only register a signal on the same object once, or else you will get a runtime. Overriding signals is usually a bug, but if you are confident that it is not, you can silence this runtime with `override = TRUE`.
+
+```dm
+RegisterSignal(fork, COMSIG_FORK_STAB, PROC_REF(on_fork_stab), override = TRUE)
+```
+
+If you decide to do this, you should make it clear with a comment explaining why it is necessary. This helps us to understand that the signal override is not a bug, and may help us to remove it in the future if the assumptions change.
 
 ### Enforcing parent calling
 
@@ -157,7 +217,7 @@ In a lot of our older code, `process()` is frame dependent. Here's some example 
 	var/health = 100
 	var/health_loss = 4 //We want to lose 2 health per second, so 4 per SSmobs process
 
-/mob/testmob/process(delta_time) //SSmobs runs once every 2 seconds
+/mob/testmob/process(seconds_per_tick) //SSmobs runs once every 2 seconds
 	health -= health_loss
 ```
 
@@ -172,11 +232,11 @@ How do we solve this? By using delta-time. Delta-time is the amount of seconds y
 	var/health = 100
 	var/health_loss = 2 //Health loss every second
 
-/mob/testmob/process(delta_time) //SSmobs runs once every 2 seconds
-	health -= health_loss * delta_time
+/mob/testmob/process(seconds_per_tick) //SSmobs runs once every 2 seconds
+	health -= health_loss * seconds_per_tick
 ```
 
-In the above example, we made our health_loss variable a per second value rather than per process. In the actual process() proc we then make use of deltatime. Because SSmobs runs once every  2 seconds. Delta_time would have a value of 2. This means that by doing health_loss * delta_time, you end up with the correct amount of health_loss per process, but if for some reason the SSmobs subsystem gets changed to be faster or slower in a PR, your health_loss variable will work the same.
+In the above example, we made our health_loss variable a per second value rather than per process. In the actual process() proc we then make use of deltatime. Because SSmobs runs once every  2 seconds. Delta_time would have a value of 2. This means that by doing health_loss * seconds_per_tick, you end up with the correct amount of health_loss per process, but if for some reason the SSmobs subsystem gets changed to be faster or slower in a PR, your health_loss variable will work the same.
 
 For example, if SSmobs is set to run once every 4 seconds, it would call process once every 4 seconds and multiply your health_loss var by 4 before subtracting it. Ensuring that your code is frame independent.
 
@@ -223,7 +283,7 @@ Good:
 		off_overlay = iconstate2appearance(icon, "off")
 		broken_overlay = icon2appearance(broken_icon)
 	if (stat & broken)
-		add_overlay(broken_overlay) 
+		add_overlay(broken_overlay)
 		return
 	if (is_on)
 		add_overlay(on_overlay)
@@ -247,7 +307,7 @@ Bad:
 	if (isnull(our_overlays))
 		our_overlays = list("on" = iconstate2appearance(overlay_icon, "on"), "off" = iconstate2appearance(overlay_icon, "off"), "broken" = iconstate2appearance(overlay_icon, "broken"))
 	if (stat & broken)
-		add_overlay(our_overlays["broken"]) 
+		add_overlay(our_overlays["broken"])
 		return
 	...
 ```
@@ -334,7 +394,7 @@ At its best, it can make some very common patterns easy to use, and harder to me
 		some_code()
 		if (do_something_else())
 			. = TRUE // Uh oh, what's going on!
-	
+
 	// even
 	// more
 	// code
@@ -411,7 +471,7 @@ Meaning:
 	to_chat(world, uh_oh())
 ```
 
-...will print `woah!`. 
+...will print `woah!`.
 
 For this reason, it is acceptable for `.` to be used in places where consumers can reasonably continue in the event of a runtime.
 
@@ -437,7 +497,7 @@ If you are using `.` in this case (or for another case that might be acceptable,
 	. = ..()
 	if (. == BIGGER_SUPER_ATTACK)
 		return BIGGER_SUPER_ATTACK // More readable than `.`
-	
+
 	// Due to how common it is, most uses of `. = ..()` do not need a trailing `return .`
 ```
 
@@ -455,6 +515,30 @@ The following is a list of procs, and their safe replacements.
 * Move in a thing's direction, ignoring turf density `walk_towards()` -> `SSmove_manager.home_onto()` and `SSmove_manager.move_towards_legacy()`, check the documentation to see which you like better
 * Move away from something, taking turf density into account `walk_away()` -> `SSmove_manager.move_away()`
 * Move to a random place nearby. NOT random walk `walk_rand()` -> `SSmove_manager.move_rand()` is random walk, `SSmove_manager.move_to_rand()` is walk to a random place
+
+### Avoid pointer use
+
+BYOND has a variable type called pointers, which allow you to reference a variable rather then its value. As an example of how this works:
+
+```
+var/pointed_at = "text"
+var/value = pointed_at // copies the VALUE of pointed at
+var/reference = &pointed_at // points at pointed_at itself
+
+// so we can retain a reference even if pointed_at changes
+pointed_at = "text AGAIN"
+world << (*reference) // Deref to get the value, outputs "text AGAIN"
+
+// or modify the var remotely
+*reference = "text a THIRD TIME"
+world << pointed_at // outputs "text a THIRD TIME"
+```
+
+The problem with this is twofold.
+- First: if you use a pointer to reference a var on a datum, it is essentially as if you held an invisible reference to that datum. This risks hard deletes in very unclear ways that cannot be tested for.
+- Second: People don't like, understand how pointers work? They mix them up with classical C pointers, when they're more like `std::shared_ptr`. This leads to code that just doesn't work properly, or is hard to follow without first getting your mind around it. It also risks hiding what code does in dumb ways because pointers don't have unique types.
+
+For these reasons and with the hope of avoiding pointers entering general use, be very careful using them, if you use them at all.
 
 ### BYOND hellspawn
 

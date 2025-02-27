@@ -1,4 +1,5 @@
-import { CheckboxInput, FeatureToggle } from '../base';
+import { CheckboxInput, Feature, FeatureToggle } from '../base';
+import { FeatureDropdownInput } from '../dropdowns';
 
 export const tgui_fancy: FeatureToggle = {
   name: 'Enable fancy TGUI',
@@ -28,9 +29,24 @@ export const tgui_input_swapped: FeatureToggle = {
   component: CheckboxInput,
 };
 
+export const tgui_layout: Feature<string> = {
+  name: 'Default TGUI Layout',
+  category: 'UI',
+  description:
+    'Applies the selected layout type to all interfaces where it possible. Like on Smartfridge.',
+  component: FeatureDropdownInput,
+};
+
 export const tgui_lock: FeatureToggle = {
   name: 'Lock TGUI to main monitor',
   category: 'UI',
   description: 'Locks TGUI windows to your main monitor.',
+  component: CheckboxInput,
+};
+
+export const tgui_say_light_mode: FeatureToggle = {
+  name: 'Say: Light mode',
+  category: 'UI',
+  description: 'Sets TGUI Say to use a light mode.',
   component: CheckboxInput,
 };
